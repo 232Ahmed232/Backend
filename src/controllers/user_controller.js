@@ -160,6 +160,7 @@ const logOutUser = aysncHandler(async (req, res) => {
     .clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "User logged out"))
 })
+
 const refreshAccessToken = aysncHandler(async (req, res) => {
   const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
 
@@ -204,10 +205,109 @@ const refreshAccessToken = aysncHandler(async (req, res) => {
   }
 })
 
+const changeCurrentPassword = aysncHandler(async(req,res)=>{
+  const {oldPassword,newPassword} = req.body
+  const user =  await User.findById(req.user?._id)
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(400,"Invalid old Password")
+  }
+
+  user.password = newPassword
+  await user.save({validateBeforeSave:false})
+
+  return res.status(200)
+  .json(new ApiResponse(200,{},"Password changed successfully"))
+})
+
+
+const getCurrentUser = aysncHandler(async(req,res) =>{
+  return res.status(200)
+  .json(200,req.user,"Cureent user fetched successfully")
+})
+
+
+const updateAccountDetails = aysncHandler(async(req,res)=>{
+  const {fullname,email} = req.body
+  if (!fullname || !email) {
+    throw new ApiError(400,"User name and email are req")
+  }
+
+  const user = User.findByIdAndUpdate(req.user?._id,
+    {
+      $set:{
+        fullname,
+        email:email
+      }
+    },{
+      new:true
+    }).select("-password")
+
+    return res.status(200)
+    .json(new ApiResponse(200,user,"Account Details successfully"))
+
+})
+
+
+const updateUserCoverImage = aysncHandler(async(req,res)=>{
+  const coverLocalPath = req.file?.path
+
+  if (!coverLocalPath) {
+    throw new ApiError(400,"CoveriMage file not found")
+  }
+
+  const coverImage = await uploadOnCloudinary(avatarLocalPath)
+
+  if (!coverImage.url) {
+    throw new ApiError(400,"While uploading Cover Image")
+  }
+
+  const user = await User.findByIdAndUpdate(req.user?._id,
+    {
+      $set:{
+        coverImage:coverImage.url
+      }
+    },{new:true}).select("-password")
+
+    return res.status(200)
+    .json(new ApiResponse(200,user,"Cover I mage successfully"))
+})
+
+
+const updateUserAvatar = aysncHandler(async(req,res)=>{
+  const avatarLocalPath = req.file?.path
+
+  if (!avatarLocalPath) {
+    throw new ApiError(400,"Avatar file not found")
+  }
+
+  const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+  if (!avatar.url) {
+    throw new ApiError(400,"While uploading avatar")
+  }
+
+  await User.findByIdAndUpdate(req.user?._id,
+    {
+      $set:{
+        avatar:avatar.url
+      }
+    },{new:true}).select("-password")
+
+    return res.status(200)
+    .json(new ApiResponse(200,user,"Avatar I mage successfully"))
+})
+
 
 export {
   registerUser,
   loginUser,
   logOutUser,
-  refreshAccessToken
+  refreshAccessToken,
+  changeCurrentPassword,
+  getCurrentUser,
+  updateAccountDetails,
+  updateUserAvatar,
+  updateUserCoverImage
 }
