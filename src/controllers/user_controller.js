@@ -201,102 +201,166 @@ const refreshAccessToken = aysncHandler(async (req, res) => {
         )
       )
   } catch (error) {
-    throw new ApiError(401,error?.message||"Invalid token")
+    throw new ApiError(401, error?.message || "Invalid token")
   }
 })
 
-const changeCurrentPassword = aysncHandler(async(req,res)=>{
-  const {oldPassword,newPassword} = req.body
-  const user =  await User.findById(req.user?._id)
+const changeCurrentPassword = aysncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body
+  const user = await User.findById(req.user?._id)
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
 
   if (!isPasswordCorrect) {
-    throw new ApiError(400,"Invalid old Password")
+    throw new ApiError(400, "Invalid old Password")
   }
 
   user.password = newPassword
-  await user.save({validateBeforeSave:false})
+  await user.save({ validateBeforeSave: false })
 
   return res.status(200)
-  .json(new ApiResponse(200,{},"Password changed successfully"))
+    .json(new ApiResponse(200, {}, "Password changed successfully"))
 })
 
 
-const getCurrentUser = aysncHandler(async(req,res) =>{
+const getCurrentUser = aysncHandler(async (req, res) => {
   return res.status(200)
-  .json(200,req.user,"Cureent user fetched successfully")
+    .json(new ApiResponse(200, req.user, "Cureent user fetched successfully"));
 })
 
 
-const updateAccountDetails = aysncHandler(async(req,res)=>{
-  const {fullname,email} = req.body
+const updateAccountDetails = aysncHandler(async (req, res) => {
+  const { fullname, email } = req.body
   if (!fullname || !email) {
-    throw new ApiError(400,"User name and email are req")
+    throw new ApiError(400, "User name and email are req")
   }
 
   const user = User.findByIdAndUpdate(req.user?._id,
     {
-      $set:{
+      $set: {
         fullname,
-        email:email
+        email: email
       }
-    },{
-      new:true
-    }).select("-password")
+    }, {
+    new: true
+  }).select("-password")
 
-    return res.status(200)
-    .json(new ApiResponse(200,user,"Account Details successfully"))
+  return res.status(200)
+    .json(new ApiResponse(200, user, "Account Details successfully"))
 
 })
 
 
-const updateUserCoverImage = aysncHandler(async(req,res)=>{
+const updateUserCoverImage = aysncHandler(async (req, res) => {
   const coverLocalPath = req.file?.path
 
   if (!coverLocalPath) {
-    throw new ApiError(400,"CoveriMage file not found")
+    throw new ApiError(400, "CoveriMage file not found")
   }
 
   const coverImage = await uploadOnCloudinary(avatarLocalPath)
 
   if (!coverImage.url) {
-    throw new ApiError(400,"While uploading Cover Image")
+    throw new ApiError(400, "While uploading Cover Image")
   }
 
   const user = await User.findByIdAndUpdate(req.user?._id,
     {
-      $set:{
-        coverImage:coverImage.url
+      $set: {
+        coverImage: coverImage.url
       }
-    },{new:true}).select("-password")
+    }, { new: true }).select("-password")
 
-    return res.status(200)
-    .json(new ApiResponse(200,user,"Cover I mage successfully"))
+  return res.status(200)
+    .json(new ApiResponse(200, user, "Cover I mage successfully"))
 })
 
 
-const updateUserAvatar = aysncHandler(async(req,res)=>{
+const updateUserAvatar = aysncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path
 
   if (!avatarLocalPath) {
-    throw new ApiError(400,"Avatar file not found")
+    throw new ApiError(400, "Avatar file not found")
   }
 
   const avatar = await uploadOnCloudinary(avatarLocalPath)
 
   if (!avatar.url) {
-    throw new ApiError(400,"While uploading avatar")
+    throw new ApiError(400, "While uploading avatar")
   }
 
   await User.findByIdAndUpdate(req.user?._id,
     {
-      $set:{
-        avatar:avatar.url
+      $set: {
+        avatar: avatar.url
       }
-    },{new:true}).select("-password")
+    }, { new: true }).select("-password")
 
-    return res.status(200)
-    .json(new ApiResponse(200,user,"Avatar I mage successfully"))
+  return res.status(200)
+    .json(new ApiResponse(200, user, "Avatar I mage successfully"))
+})
+
+
+const getUserChannelProfile = aysncHandler(async (req, res) => {
+  const { username } = req.params
+
+  if (!username.trim()) {
+    throw new ApiError(400, "Username is missing")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase()
+      }
+    }, {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscriberTo"
+      }
+    }, 
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers"
+        },
+        channelsSubscribetoCount: {
+          $size: "$subscriberTo"
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false
+          }
+        }
+      }
+
+    },
+    {
+      $project: {
+
+      }
+    }
+  ])
+
+
+  if (!channel?.length){
+    throw new ApiError(400,"Channel does not exist")
+  }
+
+  return res.status(200)
+  .json( new ApiResponse(200, channel[0],"User channel fetched successfully"))
+
 })
 
 
